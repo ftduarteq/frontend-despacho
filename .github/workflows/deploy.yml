@@ -31,14 +31,12 @@ jobs:
           docker push $ECR_REGISTRY/frontend-despacho:latest
 
       - name: Desplegar en Frontend EC2 usando SSM
-        uses: aws-actions/run-command@v1
+        uses: aws-actions/aws-ssm-send-command@v1
         with:
           instance-ids: ${{ secrets.FRONTEND_INSTANCE_ID }}
           document-name: AWS-RunShellScript
-          working-directory: /home/ec2-user
-          parameters: |
-            commands=[
-              "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.ecr-login.outputs.registry }}",
-              "docker pull ${{ steps.ecr-login.outputs.registry }}/frontend-despacho:latest",
-              "docker compose -f docker-compose.frontend.yml up -d --no-deps --force-recreate frontend"
-            ]
+          parameters: '{"commands":[
+            "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.ecr-login.outputs.registry }}",
+            "docker pull ${{ steps.ecr-login.outputs.registry }}/frontend-despacho:latest",
+            "cd /home/ec2-user && docker compose -f docker-compose.frontend.yml up -d --no-deps --force-recreate frontend"
+          ]}'
