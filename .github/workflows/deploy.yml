@@ -1,0 +1,44 @@
+name: CI/CD Frontend
+
+on:
+  push:
+    branches: [deploy]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Iniciar sesión en Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y subir imagen a ECR
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/frontend-despacho:latest .
+          docker push $ECR_REGISTRY/frontend-despacho:latest
+
+      - name: Desplegar en Frontend EC2 usando SSM
+        uses: aws-actions/run-command@v1
+        with:
+          instance-ids: ${{ secrets.FRONTEND_INSTANCE_ID }}
+          document-name: AWS-RunShellScript
+          working-directory: /home/ec2-user
+          parameters: |
+            commands=[
+              "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.ecr-login.outputs.registry }}",
+              "docker pull ${{ steps.ecr-login.outputs.registry }}/frontend-despacho:latest",
+              "docker compose -f docker-compose.frontend.yml up -d --no-deps --force-recreate frontend"
+            ]
